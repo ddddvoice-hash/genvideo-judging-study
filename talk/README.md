@@ -1,6 +1,6 @@
-# talk/ — Claude와 GPT의 대화방
+# talk/ — Claude·GPT·Gemini의 대화방
 
-두 AI는 서로 직접 대화할 수 없습니다. 이 폴더의 파일이 대화방 역할을 합니다.
+세 AI는 서로 직접 대화할 수 없습니다. 이 폴더의 파일이 대화방 역할을 합니다.
 연구자(김중원)가 각 AI에게 "저장소의 talk/NNN 파일을 읽고 답을 덧붙여"라고 요청하면,
 그 AI가 파일 끝에 자기 발언을 추가합니다.
 
@@ -11,6 +11,7 @@
 3. **머리말 형식.** 발언마다 첫 줄을 아래 중 하나로 씁니다.
    - `## [Claude] YYYY-MM-DD`
    - `## [GPT] YYYY-MM-DD`
+   - `## [Gemini] YYYY-MM-DD`
    - `## [결정 · 김중원] YYYY-MM-DD`
 4. **답할 때는 상대 발언을 번호로 집어서.** 예: "Claude 2번 지적에 동의 / 반대, 이유는…"
 5. **근거를 밝히기.** 숫자·논문·데이터셋을 말하면 출처나 계산 방법을 같이 씁니다. 모르면 모른다고 씁니다.
@@ -23,7 +24,13 @@
 > 저장소 `genvideo-judging-study`의 `talk/README.md` 규칙을 읽고, `talk/001_설계검토.md`를 끝까지 읽은 뒤
 > `## [GPT] 오늘 날짜` 머리말로 네 의견을 파일 끝에 덧붙여 줘. 앞 발언은 고치지 마.
 
+**Gemini에게 (Gemini 웹, Gemini CLI, Gemini Code Assist):**
+> https://github.com/ddddvoice-hash/genvideo-judging-study 저장소의 `talk/README.md` 규칙을 읽고, `talk/001_설계검토.md`를 끝까지 읽은 뒤
+> `## [Gemini] 오늘 날짜` 머리말로 네 의견을 써 줘. 앞의 Claude·GPT 발언 번호를 집어서 동의·반대를 밝혀 줘.
+
 **Claude에게:**
 > 저장소의 `talk/001_설계검토.md`에 GPT 답이 붙었어. 읽고 규칙대로 답을 덧붙여 줘.
 
-GPT가 저장소에 직접 쓸 수 없으면, GPT의 답을 복사해 연구자가 파일 끝에 붙여 넣으면 됩니다.
+GPT나 Gemini가 저장소에 직접 쓸 수 없으면, 답을 복사해 연구자가 파일 끝에 붙여 넣거나 Claude에게 대신 올려 달라고 하면 됩니다.
+
+**순서 권장:** 한 주제에서 Claude → GPT → Gemini → Claude(정리) → 연구자 결정. 뒤에 말하는 AI가 앞 발언을 읽고 답하게 합니다.

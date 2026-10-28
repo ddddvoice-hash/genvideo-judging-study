@@ -1,4 +1,4 @@
-# AI 작업 규칙 (GPT·Codex·Claude 공통)
+# AI 작업 규칙 (GPT·Codex·Gemini·Claude 공통)
 
 이 저장소는 연구자 김중원의 생성 영상 판정 연구입니다. AI는 조수이고 결정은 연구자가 합니다.
 
