@@ -1,0 +1,808 @@
+<title>생성 영상 판정실</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: a lab bench — one top bar, tabs, then a single working column; data in mono, verdicts as coloured chips */
+:root{
+  --bg:#f3f4f6; --panel:#ffffff; --ink:#1b1f27; --muted:#5c6474; --line:#d9dde4; --soft:#eceef2;
+  --accent:#2f5bd3; --accent-ink:#ffffff; --accent-soft:#e6edfc;
+  --ok:#1d7a4a; --ok-soft:#e3f3ea; --warn:#a2610b; --warn-soft:#fbf0dc; --bad:#b3261e; --bad-soft:#fbe7e5;
+  --font:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --panel:#1a1e26; --ink:#e7e9ee; --muted:#9aa3b2; --line:#2c323d; --soft:#222731;
+  --accent:#7d9cf0; --accent-ink:#0d1220; --accent-soft:#1f2a44;
+  --ok:#5cc28d; --ok-soft:#173326; --warn:#e2a64a; --warn-soft:#3a2c14; --bad:#f08079; --bad-soft:#3d1c1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --panel:#1a1e26; --ink:#e7e9ee; --muted:#9aa3b2; --line:#2c323d; --soft:#222731;
+  --accent:#7d9cf0; --accent-ink:#0d1220; --accent-soft:#1f2a44;
+  --ok:#5cc28d; --ok-soft:#173326; --warn:#e2a64a; --warn-soft:#3a2c14; --bad:#f08079; --bad-soft:#3d1c1a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:17px;margin:0 0 4px;font-weight:600;text-wrap:balance}
+h3{font-size:15px;margin:0;font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.who{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:500;background:var(--soft);color:var(--ink);white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.acc{background:var(--accent-soft);color:var(--accent)}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+nav.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:8px 12px;font:inherit;font-weight:500;color:var(--muted);cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+button.btn{font:inherit;font-weight:500;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;cursor:pointer}
+button.btn:hover{border-color:var(--accent)}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=number],textarea,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{width:100%;min-height:90px;resize:vertical}
+label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex-wrap:wrap}
+.seg button{font:inherit;border:0;background:var(--panel);color:var(--ink);padding:9px 16px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.check{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:10px 12px;cursor:pointer}
+.check input{margin-top:4px}
+.check b{display:block;font-weight:600;font-size:14px}
+.check span{font-size:12.5px;color:var(--muted)}
+.vidcard{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);border-radius:var(--r);padding:16px;background:var(--soft)}
+.vidhead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center}
+a.open{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:var(--accent-ink);text-decoration:none;border-radius:8px;padding:9px 16px;font-weight:600}
+.dots{display:flex;flex-wrap:wrap;gap:4px}
+.dots button{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--panel);font-family:var(--mono);font-size:10.5px;color:var(--muted);cursor:pointer;padding:0}
+.dots button.done{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.dots button.cur{outline:2px solid var(--accent);outline-offset:1px}
+.bar{height:8px;background:var(--soft);border-radius:999px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:9px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:600;background:var(--soft);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 12px;border-radius:0 8px 8px 0;font-size:13.5px}
+.note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.out{white-space:pre-wrap;background:var(--soft);border-radius:8px;padding:12px;font-size:13.5px;max-height:420px;overflow:auto}
+.card{border:1px solid var(--line);border-radius:9px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.guide{white-space:pre-wrap;font-size:14px;background:var(--soft);border-radius:8px;padding:12px;max-height:320px;overflow:auto}
+details summary{cursor:pointer;font-weight:500}
+.frames{display:flex;gap:4px}
+.frames img{width:48px;height:32px;object-fit:cover;border-radius:4px;background:var(--soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13.5px;z-index:20}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>생성 영상 판정실</h1>
+      <p class="muted small">판정 가이드를 보완하면 판정자들의 일치도가 오르는가 — 판정자 4명 · 영상 240개</p>
+    </div>
+    <div class="who" id="who"><span class="chip">연결 중…</span></div>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <main id="main"><div class="panel"><p class="muted">불러오는 중입니다…</p></div></main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ===================== 고정 값 ===================== */
+const CONDS = [
+  {id:"A-v1", set:"A", guide:"v1", label:"1차 · 세트 A · 가이드 v1"},
+  {id:"B-v2", set:"B", guide:"v2", label:"2차 · 세트 B · 가이드 v2"},
+  {id:"A-v2", set:"A", guide:"v2", label:"재판정 · 세트 A · 가이드 v2"},
+];
+const TYPES = [
+  {k:"body", name:"신체 형태", hint:"손가락 수, 팔다리 개수, 눈·코·입이 뭉개짐"},
+  {k:"motion", name:"신체 움직임", hint:"갑자기 자리 이동, 관절이 뒤로 꺾임, 몸이 물체 통과"},
+  {k:"object", name:"사물·배경", hint:"사람 외 대상이 갑자기 생기거나 사라지거나 바뀜"},
+  {k:"quality", name:"화질", hint:"화면 전체가 흐림, 노이즈, 깨짐"},
+];
+const LABELS = ["R1","R2","R3","R4","R5","R6"];
+const DEFAULT_V1 = `판정하는 법
+1. 영상을 필요한 만큼 보세요. 본 횟수를 '재생 횟수'에 적습니다.
+2. 사람이나 사물이 현실에서는 일어날 수 없는 모양이나 움직임을 보이면 '왜곡 있음'입니다.
+3. 왜곡이 있으면 네 가지 유형 중 해당하는 것을 모두 고릅니다.
+   - 신체 형태: 몸의 모양이 이상함 (손가락 수, 팔다리 개수, 눈·코·입이 뭉개짐 등)
+   - 신체 움직임: 모양은 멀쩡하나 움직임이 불가능함 (갑자기 자리 이동, 관절이 뒤로 꺾임, 몸이 물체를 통과)
+   - 사물·배경: 사람 외 대상이 갑자기 생기거나 사라지거나 모양이 바뀜
+   - 화질: 화면 전체가 흐리거나 노이즈·깨짐이 있음
+4. 가장 눈에 띄는 왜곡을 기준으로 심각도를 고릅니다. 찾아야 보이면 경미, 눈에 바로 띄면 심각.
+5. 고민되거나 애매했다면 이유를 '메모'에 한 줄 적습니다. 다른 판정자와 상의하지 마세요.
+'판단 불가'는 영상이 재생되지 않거나 사람이 등장하지 않을 때만 고릅니다.`;
+
+/* ===================== 상태 ===================== */
+const S = {
+  db:null, user:null, sample:null, assets:null, downloads:null,
+  uid:null, isOwner:false, canWrite:true,
+  config:{active:"A-v1", guides:{v1:DEFAULT_V1, v2:""}},
+  videos:[], myLabel:null, myJ:{}, tab:null,
+  rater:{cond:null, idx:0, draft:null},
+  analysis:{c1:"A-v1", c2:"", result:null},
+};
+const $ = (s, r=document) => r.querySelector(s);
+const el = (tag, attrs={}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "text") e.textContent = v;
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
+};
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
+
+/* ===================== 계산 (파이썬 03_agreement.py와 같은 방식) ===================== */
+function fleiss(rows){ // rows: array of arrays (같은 길이), 값=범주
+  if (!rows.length) return NaN;
+  const n = rows[0].length; if (n < 2) return NaN;
+  const cats = [...new Set(rows.flat())];
+  const tot = {}; cats.forEach(c=>tot[c]=0);
+  let pbar = 0;
+  for (const r of rows){
+    const cnt = {}; r.forEach(v=>{cnt[v]=(cnt[v]||0)+1; tot[v]++;});
+    let s=0; for (const c in cnt) s += cnt[c]*cnt[c];
+    pbar += (s - n)/(n*(n-1));
+  }
+  pbar /= rows.length;
+  const N = rows.length*n; let pe = 0; for (const c of cats) pe += (tot[c]/N)**2;
+  if (Math.abs(1-pe) < 1e-12) return NaN;
+  return (pbar - pe)/(1 - pe);
+}
+function cohen(a, b){
+  const n=a.length; if(!n) return NaN;
+  const cats=[...new Set([...a,...b])]; let po=0; a.forEach((v,i)=>{ if(v===b[i]) po++; }); po/=n;
+  let pe=0; for(const c of cats){ pe += (a.filter(x=>x===c).length/n)*(b.filter(x=>x===c).length/n); }
+  if (Math.abs(1-pe)<1e-12) return NaN; return (po-pe)/(1-pe);
+}
+function rng(seed){ let s = seed>>>0 || 1; return ()=>{ s ^= s<<13; s>>>=0; s ^= s>>>17; s ^= s<<5; s>>>=0; return s/4294967296; }; }
+function hashStr(str){ let h=2166136261; for (const ch of str){ h ^= ch.codePointAt(0); h = Math.imul(h,16777619); } return h>>>0; }
+function pct(arr,p){ const s=[...arr].sort((x,y)=>x-y); const i=(s.length-1)*p; const lo=Math.floor(i), hi=Math.ceil(i); return s[lo]+(s[hi]-s[lo])*(i-lo); }
+function bootCI(rows, R=2000, seed=2026){
+  const r = rng(seed), v=[];
+  for (let b=0;b<R;b++){ const s=[]; for(let i=0;i<rows.length;i++) s.push(rows[Math.floor(r()*rows.length)]); const k=fleiss(s); if(!isNaN(k)) v.push(k); }
+  return v.length ? [pct(v,.025), pct(v,.975)] : [NaN,NaN];
+}
+function bootDiff(r1, r2, paired, keys1, keys2, R=2000, seed=2027){
+  const r = rng(seed), v=[];
+  if (paired){
+    const m2 = new Map(keys2.map((k,i)=>[k,r2[i]]));
+    const pairs = keys1.map((k,i)=>[r1[i], m2.get(k)]).filter(p=>p[1]);
+    for (let b=0;b<R;b++){ const a=[],c=[]; for(let i=0;i<pairs.length;i++){ const p=pairs[Math.floor(r()*pairs.length)]; a.push(p[0]); c.push(p[1]); } const d=fleiss(c)-fleiss(a); if(!isNaN(d)) v.push(d); }
+  } else {
+    for (let b=0;b<R;b++){ const a=[],c=[]; for(let i=0;i<r1.length;i++) a.push(r1[Math.floor(r()*r1.length)]); for(let i=0;i<r2.length;i++) c.push(r2[Math.floor(r()*r2.length)]); const d=fleiss(c)-fleiss(a); if(!isNaN(d)) v.push(d); }
+  }
+  return v.length ? [pct(v,.025), pct(v,.975)] : [NaN,NaN];
+}
+function spearman(x, y){
+  const rank = a => { const idx=a.map((v,i)=>[v,i]).sort((p,q)=>p[0]-q[0]); const r=new Array(a.length); let i=0; while(i<idx.length){ let j=i; while(j+1<idx.length && idx[j+1][0]===idx[i][0]) j++; const avg=(i+j)/2+1; for(let k=i;k<=j;k++) r[idx[k][1]]=avg; i=j+1; } return r; };
+  const rx=rank(x), ry=rank(y), n=x.length, mx=rx.reduce((s,v)=>s+v,0)/n, my=ry.reduce((s,v)=>s+v,0)/n;
+  let sxy=0,sx=0,sy=0; for(let i=0;i<n;i++){ sxy+=(rx[i]-mx)*(ry[i]-my); sx+=(rx[i]-mx)**2; sy+=(ry[i]-my)**2; }
+  return sxy/Math.sqrt(sx*sy);
+}
+function interpret(k){ if(isNaN(k)) return "계산 불가"; if(k<=0) return "일치 안 됨"; if(k<=.2) return "약간"; if(k<=.4) return "어느 정도"; if(k<=.6) return "보통"; if(k<=.8) return "상당히"; return "거의 완전"; }
+const f3 = x => isNaN(x) ? "–" : x.toFixed(3);
+
+/* 판정 묶음 → 항목별 표. judg: {label: {vid: j}} */
+function buildTables(judg){
+  const labels = Object.keys(judg).filter(l=>Object.keys(judg[l]).length).sort();
+  const vids = [...new Set(labels.flatMap(l=>Object.keys(judg[l])))].sort();
+  const items = {"왜곡 유무":[], "심각도 (없음·경미·심각)":[]}; TYPES.forEach(t=>items["유형: "+t.name]=[]);
+  const keys = {}; Object.keys(items).forEach(k=>keys[k]=[]);
+  for (const v of vids){
+    const js = labels.map(l=>judg[l][v]);
+    if (js.some(j=>!j || (j.presence!=="없음" && j.presence!=="있음"))) continue;
+    const pres = js.map(j=>j.presence);
+    items["왜곡 유무"].push(pres); keys["왜곡 유무"].push(v);
+    const sev = js.map(j=> j.presence==="없음" ? "없음" : (j.severity||""));
+    if (sev.every(s=>s)){ items["심각도 (없음·경미·심각)"].push(sev); keys["심각도 (없음·경미·심각)"].push(v); }
+    for (const t of TYPES){ items["유형: "+t.name].push(js.map(j=> j.presence==="있음" && (j.types||[]).includes(t.k) ? 1 : 0)); keys["유형: "+t.name].push(v); }
+  }
+  return {labels, vids, items, keys};
+}
+
+/* ===================== 저장소 ===================== */
+const jPath = uid => `ratings/${uid}/j`;
+async function loadAllHuman(cond){ // {label:{vid:j}}
+  const out = {};
+  const raters = await S.db.collection("ratings").get();
+  for (const d of raters.docs){
+    const label = (d.data()||{}).label || ("판정자-"+d.id.slice(-4));
+    const q = await S.db.collection(`ratings/${d.id}/j`).where("cond","==",cond).get();
+    q.docs.forEach(x=>{ const j=x.data(); (out[label] ||= {})[j.vid]=j; });
+  }
+  const imp = await S.db.collection("secret").get();
+  imp.docs.forEach(d=>{
+    if (!d.id.startsWith("imported_"+cond+"_")) return;
+    const lab = d.id.split("_").pop(); const rows = (d.data()||{}).rows||{};
+    for (const [vid,j] of Object.entries(rows)) (out[lab] ||= {})[vid] = j;
+  });
+  return out;
+}
+async function getSecret(name){ const s = await S.db.doc("secret/"+name).get(); return s.exists ? s.data() : null; }
+async function setSecret(name, data){ await S.db.doc("secret/"+name).set(data); }
+
+/* ===================== 시작 ===================== */
+(async function boot(){
+  try { S.user = await claude.use("user"); } catch { S.user = null; }
+  try { S.db = await claude.use("db"); } catch { S.db = null; }
+  if (!S.db){ renderNoDb(); return; }
+  S.uid = S.user ? await S.user.id() : null;
+  S.isOwner = S.user ? await S.user.isOwner() : false;
+  claude.use("sample").then(x=>{ S.sample=x; if(S.tab && S.tab!=="rate") render(true); }).catch(()=>{});
+  if (S.isOwner){
+    claude.use("assets").then(x=>S.assets=x).catch(()=>{});
+    claude.use("downloads").then(x=>S.downloads=x).catch(()=>{});
+  }
+  S.db.doc("study/config").onSnapshot(s=>{ if(s.exists){ const d=s.data(); S.config={active:d.active||"A-v1", guides:{v1:d.guides?.v1||DEFAULT_V1, v2:d.guides?.v2||""}}; } render(true); }, ()=>{});
+  S.db.collection("videos").onSnapshot(q=>{ S.videos=q.docs.map(d=>d.data()).filter(v=>v&&v.vid); render(true); }, ()=>{});
+  if (S.uid && !S.isOwner){
+    S.db.doc("ratings/"+S.uid).onSnapshot(s=>{ S.myLabel = s.exists ? s.data().label : null; render(true); }, ()=>{});
+    S.db.collection(jPath(S.uid)).onSnapshot(q=>{ S.myJ={}; q.docs.forEach(d=>{ const j=d.data(); S.myJ[j.cond+"_"+j.vid]=j; }); render(true); }, ()=>{});
+  }
+  S.tab = S.isOwner ? "progress" : "rate";
+  renderWho(); render();
+})();
+
+function renderNoDb(){
+  $("#who").replaceChildren(el("span",{class:"chip warn"},"저장소 없음"));
+  $("#main").replaceChildren(el("div",{class:"panel"},
+    el("h2",{},"Claude에 로그인한 상태에서 열어 주세요"),
+    el("p",{class:"muted"},"판정 결과를 저장하려면 로그인이 필요합니다. 링크를 보낸 연구자에게 접근 권한(기여자 이상)을 요청하세요.")));
+}
+async function renderWho(){
+  const w = $("#who"); w.replaceChildren();
+  if (S.isOwner) w.append(el("span",{class:"chip acc"},"연구자"));
+  else w.append(el("span",{class:"chip"},S.myLabel ? "판정자 "+S.myLabel : "판정자"));
+}
+
+/* ===================== 탭 ===================== */
+function tabsFor(){ return S.isOwner
+  ? [["progress","진행 현황"],["analysis","분석"],["ai","AI 보조"],["review","설계 검토"],["setup","설정"],["guide","가이드 보기"]]
+  : [["rate","판정하기"],["guide","가이드"]]; }
+function render(fromSnap){
+  if (!S.db) return;
+  renderWho();
+  const nav = $("#tabs"); nav.replaceChildren(...tabsFor().map(([k,n])=>el("button",{role:"tab","aria-selected":String(S.tab===k),onclick:()=>{S.tab=k; render();}},n)));
+  const main = $("#main");
+  const views = {rate:viewRate, guide:viewGuide, progress:viewProgress, analysis:viewAnalysis, ai:viewAI, review:viewReview, setup:viewSetup};
+  const keep = document.activeElement && main.contains(document.activeElement) && ["TEXTAREA","INPUT","SELECT"].includes(document.activeElement.tagName);
+  if (keep && fromSnap===true) return; // 입력 중에는 저장소 변경으로 다시 그리지 않음
+  main.replaceChildren((views[S.tab]||viewGuide)());
+}
+
+/* ===================== 판정자 화면 ===================== */
+function orderFor(cond){
+  const set = CONDS.find(c=>c.id===cond).set;
+  const list = S.videos.filter(v=>v.set===set).sort((a,b)=>a.vid.localeCompare(b.vid));
+  const r = rng(hashStr((S.uid||"x")+cond));
+  for (let i=list.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [list[i],list[j]]=[list[j],list[i]]; }
+  return list;
+}
+function viewRate(){
+  const p = el("div",{class:"panel"});
+  if (!S.uid){ p.append(el("p",{},"로그인 정보를 확인할 수 없어 판정을 저장할 수 없습니다.")); return p; }
+  if (!S.myLabel){
+    p.append(el("h2",{},"판정자 번호를 골라 주세요"),
+      el("p",{class:"muted"},"연구자에게 받은 번호를 고르세요. 결과에는 이 번호만 표시됩니다."),
+      el("div",{class:"row"}, ...LABELS.slice(0,4).map(l=>el("button",{class:"btn",onclick:async()=>{
+        try{ await S.db.doc("ratings/"+S.uid).set({label:l}); toast(l+"로 등록했어요"); }
+        catch(e){ S.canWrite=false; toast("저장 권한이 없어요. 연구자에게 기여자 권한을 요청하세요."); render(); }
+      }},l))));
+    if (!S.canWrite) p.append(el("p",{class:"note warn"},"이 링크로는 저장할 수 없습니다. 연구자에게 '기여자' 이상 권한을 요청하세요."));
+    return p;
+  }
+  const cond = S.config.active; const c = CONDS.find(x=>x.id===cond);
+  const list = orderFor(cond);
+  if (!list.length){ p.append(el("h2",{},"아직 판정할 영상이 없어요"), el("p",{class:"muted"},"연구자가 영상을 올리면 여기에 나타납니다.")); return p; }
+  if (S.rater.cond!==cond){ S.rater={cond, idx: Math.max(0, list.findIndex(v=>!S.myJ[cond+"_"+v.vid])), draft:null}; if (S.rater.idx<0) S.rater.idx=0; }
+  const done = list.filter(v=>S.myJ[cond+"_"+v.vid]).length;
+  const idx = Math.min(S.rater.idx, list.length-1); const v = list[idx];
+  const saved = S.myJ[cond+"_"+v.vid];
+  const d = S.rater.draft && S.rater.draft.vid===v.vid ? S.rater.draft : (S.rater.draft = saved ? {...saved, types:[...(saved.types||[])]} : {vid:v.vid, presence:"", types:[], severity:"", plays:1, memo:""});
+
+  p.append(
+    el("div",{class:"vidhead"},
+      el("div",{}, el("h2",{},c.label), el("p",{class:"muted small"},`${done} / ${list.length}개 완료`)),
+      el("span",{class: done===list.length ? "chip ok":"chip"}, done===list.length ? "모두 완료" : `${list.length-done}개 남음`)),
+    el("div",{class:"bar"}, el("i",{style:`width:${(done/list.length*100).toFixed(1)}%`})),
+  );
+  const form = el("div",{class:"vidcard"},
+    el("div",{class:"vidhead"},
+      el("div",{}, el("h3",{class:"mono"},`${idx+1}번 영상`), el("p",{class:"muted small"},"새 탭에서 열어 보고 돌아와 판정하세요")),
+      el("a",{class:"open",href:v.link,target:"_blank",rel:"noopener"},"영상 열기 ↗")),
+    el("div",{}, el("p",{class:"small muted"},"왜곡 유무"),
+      seg(["없음","있음","판단 불가"], d.presence, val=>{ d.presence=val; if(val!=="있음"){ d.types=[]; d.severity=""; } render(); })),
+  );
+  if (d.presence==="있음"){
+    form.append(el("div",{}, el("p",{class:"small muted"},"유형 (해당하는 것 모두)"),
+      el("div",{class:"checks"}, ...TYPES.map(t=>{ const id="t-"+t.k; return el("label",{class:"check",for:id},
+        el("input",{type:"checkbox",id,checked:d.types.includes(t.k),onchange:e=>{ d.types = e.target.checked ? [...new Set([...d.types,t.k])] : d.types.filter(x=>x!==t.k); }}),
+        el("div",{}, el("b",{},t.name), el("span",{},t.hint))); }))),
+      el("div",{}, el("p",{class:"small muted"},"심각도 (가장 눈에 띄는 왜곡 기준)"), seg(["경미","심각"], d.severity, val=>{ d.severity=val; render(); })));
+  }
+  form.append(el("div",{class:"row"},
+    el("label",{class:"field"},"재생 횟수", el("input",{type:"number",id:"plays",min:"1",max:"20",value:String(d.plays||1),style:"width:90px",oninput:e=>d.plays=Number(e.target.value)||1}))),
+    el("label",{class:"field"},"메모 (애매했던 점 — 가장 중요한 자료예요)",
+      el("textarea",{id:"memo",rows:"2",oninput:e=>d.memo=e.target.value}, d.memo||"")));
+  const err = el("p",{class:"small",style:"color:var(--bad)"});
+  form.append(err, el("div",{class:"row"},
+    el("button",{class:"btn",disabled:idx===0,onclick:()=>{S.rater.idx=idx-1; S.rater.draft=null; render();}},"이전"),
+    el("button",{class:"btn primary",onclick:async(e)=>{
+      if (!d.presence) return err.textContent="왜곡 유무를 골라 주세요.";
+      if (d.presence==="있음" && !d.types.length) return err.textContent="유형을 하나 이상 골라 주세요.";
+      if (d.presence==="있음" && !d.severity) return err.textContent="심각도를 골라 주세요.";
+      e.target.disabled=true;
+      const rec = {cond, vid:v.vid, presence:d.presence, types:d.types, severity:d.severity, plays:Number(d.plays)||1, memo:(d.memo||"").trim(), at:new Date().toISOString()};
+      try{ await S.db.doc(`${jPath(S.uid)}/${cond}_${v.vid}`).set(rec); S.rater.idx=Math.min(idx+1,list.length-1); S.rater.draft=null; toast("저장했어요"); render(); }
+      catch(x){ e.target.disabled=false; err.textContent = x&&x.code==="invalid_argument" ? "저장 권한이 없어요. 연구자에게 기여자 권한을 요청하세요." : "저장하지 못했어요. 잠시 후 다시 눌러 주세요."; }
+    }}, saved ? "고쳐서 저장하고 다음" : "저장하고 다음"),
+    el("button",{class:"btn",disabled:idx===list.length-1,onclick:()=>{S.rater.idx=idx+1; S.rater.draft=null; render();}},"건너뛰기")));
+  p.append(form,
+    el("details",{}, el("summary",{},"전체 목록 (초록 = 저장됨)"),
+      el("div",{class:"dots",style:"margin-top:10px"}, ...list.map((x,i)=>el("button",{class:(S.myJ[cond+"_"+x.vid]?"done ":"")+(i===idx?"cur":""),title:`${i+1}번`,onclick:()=>{S.rater.idx=i; S.rater.draft=null; render();}},String(i+1))))),
+    el("details",{}, el("summary",{},"판정 가이드 "+c.guide), el("div",{class:"guide",style:"margin-top:10px"}, S.config.guides[c.guide] || "아직 작성되지 않았어요.")));
+  return p;
+}
+function seg(opts, cur, on){ return el("div",{class:"seg",role:"group"}, ...opts.map(o=>el("button",{"aria-pressed":String(cur===o),onclick:()=>on(o)},o))); }
+
+function viewGuide(){
+  return el("div",{class:"grid2"},
+    el("div",{class:"panel"}, el("h2",{},"가이드 v1"), el("div",{class:"guide"},S.config.guides.v1)),
+    el("div",{class:"panel"}, el("h2",{},"가이드 v2"), el("div",{class:"guide"},S.config.guides.v2||"1차 판정 분석 뒤에 작성됩니다.")));
+}
+
+/* ===================== 연구자: 진행 현황 ===================== */
+function viewProgress(){
+  const p = el("div",{class:"panel"});
+  const cA = S.videos.filter(v=>v.set==="A").length, cB = S.videos.filter(v=>v.set==="B").length;
+  p.append(el("div",{class:"vidhead"}, el("div",{}, el("h2",{},"진행 현황"), el("p",{class:"muted small"},`영상 세트 A ${cA}개 · 세트 B ${cB}개 · 지금 판정 중: ${CONDS.find(c=>c.id===S.config.active).label}`)),
+    el("button",{class:"btn",onclick:()=>loadProgress(box)},"새로고침")));
+  if (!S.videos.length) p.append(el("p",{class:"note"},"먼저 [설정]에서 videos_A.csv와 videos_B.csv를 올려 주세요."));
+  const box = el("div",{}, el("p",{class:"muted"},"불러오는 중…"));
+  p.append(box); loadProgress(box); return p;
+}
+async function loadProgress(box){
+  try{
+    const rows = [];
+    for (const c of CONDS){ const j = await loadAllHuman(c.id); for (const [lab,m] of Object.entries(j)) rows.push([lab,c.id,Object.keys(m).length]); }
+    const labs = [...new Set(rows.map(r=>r[0]))].sort();
+    if (!labs.length){ box.replaceChildren(el("p",{class:"muted"},"아직 판정한 사람이 없어요. 판정자에게 이 페이지를 '기여자' 권한으로 공유하세요.")); return; }
+    const tb = el("table",{}, el("tr",{}, el("th",{},"판정자"), ...CONDS.map(c=>el("th",{},c.label))));
+    for (const l of labs) tb.append(el("tr",{}, el("td",{},l), ...CONDS.map(c=>{ const r=rows.find(x=>x[0]===l&&x[1]===c.id); const n=r?r[2]:0; const tot=S.videos.filter(v=>v.set===c.set).length||120; return el("td",{class:"num"}, `${n} / ${tot}`); })));
+    box.replaceChildren(el("div",{class:"tablewrap"},tb));
+  }catch(e){ box.replaceChildren(el("p",{class:"muted"},"불러오지 못했어요.")); }
+}
+
+/* ===================== 연구자: 분석 ===================== */
+function condSelect(id, val, onch, allowEmpty){
+  return el("select",{id,onchange:e=>onch(e.target.value)}, allowEmpty?el("option",{value:""},"(비교 안 함)"):null, ...CONDS.map(c=>el("option",{value:c.id,selected:c.id===val},c.label)));
+}
+function viewAnalysis(){
+  const A = S.analysis;
+  const p = el("div",{class:"panel"},
+    el("h2",{},"일치도 분석"),
+    el("p",{class:"muted small"},"Fleiss 카파 · 영상 단위 부트스트랩 2,000회 · 해석 구간 Landis·Koch(1977). 모든 판정자가 답한 영상만 씁니다."),
+    el("div",{class:"row"},
+      el("label",{class:"field"},"조건", condSelect("c1",A.c1,v=>A.c1=v)),
+      el("label",{class:"field"},"비교 조건", condSelect("c2",A.c2,v=>A.c2=v,true)),
+      el("button",{class:"btn primary",onclick:runAnalysis},"계산하기")));
+  const out = el("div",{id:"aout",style:"display:flex;flex-direction:column;gap:14px"});
+  if (A.result) out.append(A.result); p.append(out); return p;
+}
+async function runAnalysis(){
+  const A = S.analysis; const out = $("#aout"); out.replaceChildren(el("p",{class:"muted"},"계산 중…"));
+  try{
+    const vq = (await getSecret("vq"))?.map || {};
+    const res = [];
+    const t1 = buildTables(await loadAllHuman(A.c1));
+    res.push(await condBlock(A.c1, t1, vq));
+    if (A.c2){
+      const t2 = buildTables(await loadAllHuman(A.c2));
+      res.push(await condBlock(A.c2, t2, vq));
+      const paired = A.c1[0]===A.c2[0];
+      const tb = el("table",{}, el("tr",{}, ...["항목",A.c1,A.c2,"차이","차이 95% 구간","판단"].map(h=>el("th",{},h))));
+      for (const name of Object.keys(t1.items)){
+        const k1=fleiss(t1.items[name]), k2=fleiss(t2.items[name]);
+        const [lo,hi]=bootDiff(t1.items[name], t2.items[name], paired, t1.keys[name], t2.keys[name]);
+        const sure = lo>0||hi<0;
+        tb.append(el("tr",{}, el("td",{},name), el("td",{class:"num"},f3(k1)), el("td",{class:"num"},f3(k2)), el("td",{class:"num"},f3(k2-k1)), el("td",{class:"num"},`${f3(lo)} ~ ${f3(hi)}`), el("td",{}, el("span",{class: sure?(k2>k1?"chip ok":"chip bad"):"chip"}, sure?"차이 있음":"차이 불확실"))));
+      }
+      res.push(el("div",{}, el("h3",{},`비교: ${A.c1} → ${A.c2} (${paired?"같은 영상 짝지어":"다른 영상 세트"})`), el("p",{class:"muted small"},"차이 95% 구간이 0을 포함하지 않으면 '차이 있음'."), el("div",{class:"tablewrap",style:"margin-top:8px"},tb)));
+    }
+    A.result = el("div",{style:"display:flex;flex-direction:column;gap:18px"}, ...res);
+    out.replaceChildren(A.result);
+  }catch(e){ out.replaceChildren(el("p",{class:"note warn"},"계산하지 못했어요: "+(e.message||e.code||"알 수 없는 오류"))); }
+}
+async function condBlock(cond, T, vq){
+  if (T.labels.length<2) return el("p",{class:"note warn"},`${cond}: 판정자가 2명 이상 있어야 계산할 수 있어요 (지금 ${T.labels.length}명).`);
+  const tb = el("table",{}, el("tr",{}, ...["항목","영상 수","카파","95% 구간","해석"].map(h=>el("th",{},h))));
+  for (const [name, rows] of Object.entries(T.items)){
+    const k=fleiss(rows), [lo,hi]=bootCI(rows);
+    tb.append(el("tr",{}, el("td",{},name), el("td",{class:"num"},rows.length), el("td",{class:"num"},f3(k)), el("td",{class:"num"},`${f3(lo)} ~ ${f3(hi)}`), el("td",{},interpret(k))));
+  }
+  // AI 판정자
+  const ai = (await getSecret("ai_"+cond))?.rows || {};
+  let aiBlock = null;
+  const aiVids = Object.keys(ai);
+  if (aiVids.length){
+    const humans = await loadAllHuman(cond);
+    const a=[], m=[]; const withAI=[];
+    for (const v of T.keys["왜곡 유무"]){
+      if (!ai[v] || !["없음","있음"].includes(ai[v].presence)) continue;
+      const hs = T.labels.map(l=>humans[l][v].presence); const yes = hs.filter(x=>x==="있음").length;
+      if (yes*2 === hs.length) continue; // 동점 제외
+      a.push(ai[v].presence); m.push(yes*2>hs.length?"있음":"없음"); withAI.push([...hs, ai[v].presence]);
+    }
+    const agree = a.filter((x,i)=>x===m[i]).length;
+    aiBlock = el("p",{class:"note"}, `AI 판정자: 영상 ${a.length}개에서 사람 다수결과 ${a.length?Math.round(agree/a.length*100):0}% 일치 · Cohen 카파 ${f3(cohen(a,m))} · AI를 5번째 판정자로 넣은 Fleiss 카파 ${f3(fleiss(withAI))} (사람만: ${f3(fleiss(T.items["왜곡 유무"]))})`);
+  }
+  // RQ3
+  let rq3 = el("p",{class:"muted small"},"화질 점수(vq)가 없어서 RQ3을 건너뜁니다. [설정]에서 영상 CSV를 올리면 함께 저장돼요.");
+  const vs = T.keys["왜곡 유무"].filter(v=>vq[v]!=null);
+  if (vs.length>=5){
+    const humans = await loadAllHuman(cond);
+    const share = vs.map(v=>T.labels.filter(l=>humans[l][v]?.presence==="있음").length/T.labels.length);
+    rq3 = el("p",{class:"small"}, `RQ3 · 화질 점수와 '왜곡 있음' 비율의 스피어만 상관 rho = ${f3(spearman(vs.map(v=>vq[v]), share))} (영상 ${vs.length}개). 음수면 화질이 낮을수록 왜곡 판정이 많다는 뜻.`);
+  }
+  const dis = await disagreementsFor(cond);
+  return el("div",{style:"display:flex;flex-direction:column;gap:8px"},
+    el("h3",{},`${CONDS.find(c=>c.id===cond).label} · 판정자 ${T.labels.join(", ")}`),
+    el("div",{class:"tablewrap"},tb), aiBlock, rq3,
+    el("details",{}, el("summary",{},`갈린 영상 ${dis.length}개와 메모 보기`), disTable(dis)));
+}
+async function disagreementsFor(cond){
+  const H = await loadAllHuman(cond); const T = buildTables(H); const out=[];
+  for (const v of T.vids){
+    const js = T.labels.map(l=>H[l][v]); if (js.some(j=>!j)) continue;
+    const pres = js.map(j=>j.presence), sev = js.map(j=>j.presence==="있음"?j.severity:"없음");
+    const typ = js.map(j=>(j.types||[]).slice().sort().join("+")||"-");
+    let why = "";
+    if (new Set(pres).size>1) why = "유무 갈림";
+    else if (new Set(sev).size>1) why = "심각도 갈림";
+    else if (pres[0]==="있음" && new Set(typ).size>1) why = "유형 갈림";
+    if (!why) continue;
+    const link = S.videos.find(x=>x.vid===v)?.link || "";
+    out.push({vid:v, why, votes:T.labels.map((l,i)=>`${l}:${pres[i]}${pres[i]==="있음"?`/${sev[i]}/${typ[i]}`:""}`).join("  "), memos:T.labels.map((l,i)=>js[i].memo?`${l}: ${js[i].memo}`:"").filter(Boolean).join(" | "), link});
+  }
+  return out;
+}
+function disTable(dis){
+  if (!dis.length) return el("p",{class:"muted small"},"갈린 영상이 없어요.");
+  const tb = el("table",{}, el("tr",{}, ...["영상","갈린 내용","판정","메모"].map(h=>el("th",{},h))));
+  dis.forEach(d=>tb.append(el("tr",{}, el("td",{class:"num"}, d.link?el("a",{href:d.link,target:"_blank",rel:"noopener"},d.vid):d.vid), el("td",{},d.why), el("td",{class:"mono small"},d.votes), el("td",{class:"small"},d.memos||"–"))));
+  return el("div",{class:"tablewrap",style:"margin-top:8px"},tb);
+}
+
+/* ===================== 연구자: AI 보조 ===================== */
+const AI = {cond:"A-v1", claude:"", gpt:"", synth:"", busy:false, ctl:null, frameMsg:""};
+function viewAI(){
+  const wrap = el("div",{style:"display:flex;flex-direction:column;gap:16px"});
+  if (!S.sample) wrap.append(el("p",{class:"note warn"},"이 화면에서 Claude를 쓸 수 없어요. 로그인 상태와 권한을 확인하세요. GPT 복사·붙여넣기는 그대로 쓸 수 있어요."));
+  wrap.append(panelTyping(), panelAIRater());
+  return wrap;
+}
+function typingPrompt(dis, guideText, forGPT){
+  const lines = dis.slice(0,80).map(d=>`- ${d.vid} | ${d.why} | ${d.votes} | 메모: ${d.memos||"없음"}`).join("\n");
+  return `당신은 AI 생성 영상의 왜곡을 사람이 판정하는 연구를 돕는 데이터 품질 전문가입니다.
+판정자 여러 명이 아래 가이드로 같은 영상을 판정했고, 판정이 갈린 영상과 판정자 메모를 모았습니다.
+목표: 판정이 갈린 원인을 '경계 사례 유형'으로 묶고, 각 유형마다 가이드에 넣을 판정 규칙을 제안하는 것.
+
+[현재 가이드]
+${guideText}
+
+[판정이 갈린 영상 ${dis.length}개${dis.length>80?" 중 80개":""}]
+(형식: 영상 | 갈린 내용 | 판정자별 유무/심각도/유형 | 메모)
+${lines}
+
+지켜 줄 것:
+- 메모와 판정 패턴에 실제로 근거가 있는 유형만 만드세요. 근거가 약하면 '추측'이라고 표시하세요.
+- 유형은 3~8개. 각 유형에 해당 영상 ID를 붙이세요.
+- 규칙은 판정자가 바로 따라 할 수 있는 한두 문장으로.
+${forGPT
+ ? "- 한국어로, 유형마다 [유형 이름 / 무엇이 갈렸나 / 제안 규칙 / 해당 영상 / 근거 강도(강·중·약)] 순서로 정리하세요."
+ : `JSON만 답하세요: {"types":[{"code":"A","name":"","what":"","rule":"","videos":["A001"],"strength":"강|중|약"}],"notes":""}`}`;
+}
+function panelTyping(){
+  const p = el("div",{class:"panel"},
+    el("h2",{},"1. 갈린 사례 유형화 — Claude와 GPT 의견을 나란히"),
+    el("p",{class:"muted small"},"같은 자료를 Claude와 GPT에게 따로 묻고, 두 답을 Claude가 비교해 종합합니다. 최종 판단은 디도님이 합니다."),
+    el("div",{class:"row"}, el("label",{class:"field"},"조건", condSelect("aicond",AI.cond,v=>{AI.cond=v; loadTypingSaved().then(render);}))));
+  const out1 = el("div",{class:"out"}, AI.claude || "아직 없음");
+  const gptBox = el("textarea",{id:"gptpaste",rows:"6",placeholder:"GPT 답변을 여기에 붙여 넣으세요",oninput:e=>AI.gpt=e.target.value}, AI.gpt);
+  if (!AI.loaded){ AI.loaded=true; loadTypingSaved().then(render).catch(()=>{}); }
+  const out3 = el("div",{class:"out",id:"synthout"}, AI.synth || "아직 없음");
+  const status = el("p",{class:"small muted"});
+  p.append(el("div",{class:"grid2"},
+    el("div",{class:"card"}, el("h3",{},"Claude 의견"),
+      el("div",{class:"row"}, el("button",{class:"btn primary",disabled:!S.sample||AI.busy,onclick:askClaudeTyping},"Claude에게 묻기"), el("button",{class:"btn",disabled:!AI.busy,onclick:()=>AI.ctl?.abort()},"멈추기")), out1),
+    el("div",{class:"card"}, el("h3",{},"GPT 의견"),
+      el("div",{class:"row"}, el("button",{class:"btn",onclick:copyGptTyping},"GPT용 질문 복사"), el("a",{href:"https://chatgpt.com/",target:"_blank",rel:"noopener",class:"small"},"ChatGPT 열기 ↗")),
+      gptBox)),
+    el("div",{class:"row"}, el("button",{class:"btn primary",disabled:!S.sample||AI.busy,onclick:synthesize},"두 의견 종합하기"), el("button",{class:"btn",disabled:!S.sample||AI.busy,onclick:draftV2},"종합으로 가이드 v2 초안 쓰기"), el("button",{class:"btn",onclick:saveTyping},"이 내용 저장")),
+    status, el("h3",{},"종합"), out3);
+  return p;
+}
+async function loadTypingSaved(){ const s = await getSecret("typing_"+AI.cond); AI.claude=s?.claude||""; AI.gpt=s?.gpt||""; AI.synth=s?.synth||""; }
+async function saveTyping(){ try{ await setSecret("typing_"+AI.cond,{claude:AI.claude,gpt:AI.gpt,synth:AI.synth,at:new Date().toISOString()}); toast("저장했어요"); }catch{ toast("저장하지 못했어요"); } }
+function guideOf(cond){ return S.config.guides[CONDS.find(c=>c.id===cond).guide] || DEFAULT_V1; }
+async function copyGptTyping(){
+  const dis = await disagreementsFor(AI.cond);
+  if (!dis.length) return toast("이 조건에는 갈린 영상이 아직 없어요");
+  const text = typingPrompt(dis, guideOf(AI.cond), true);
+  try{ await navigator.clipboard.writeText(text); toast("복사했어요. ChatGPT에 붙여 넣으세요"); }
+  catch{ AI.synth = text; render(); toast("복사가 막혀서 아래 '종합' 칸에 질문을 띄웠어요. 직접 복사하세요"); }
+}
+function sampleErr(e){ const c=e&&e.code; return c==="not_granted"?"Claude 사용을 허용하지 않아 실행할 수 없어요.":c==="rate_limited"?"요청이 많아요. 잠시 후 다시 눌러 주세요.":c==="cancelled"?"멈췄어요.":c==="invalid_json"?"답을 읽지 못했어요. 다시 눌러 주세요.":c==="images_unavailable"?"이 화면에서는 이미지를 보낼 수 없어요.":"Claude 응답을 받지 못했어요."; }
+async function askClaudeTyping(){
+  const dis = await disagreementsFor(AI.cond);
+  if (!dis.length) return toast("이 조건에는 갈린 영상이 아직 없어요");
+  AI.busy=true; AI.ctl=new AbortController(); AI.claude="생각하는 중…"; render();
+  try{
+    const r = await S.sample.json(typingPrompt(dis, guideOf(AI.cond), false), {signal:AI.ctl.signal, modelTier:"complex"});
+    AI.claude = (r.types||[]).map(t=>`[${t.code}] ${t.name} (근거 ${t.strength||"?"})\n  갈린 점: ${t.what}\n  제안 규칙: ${t.rule}\n  영상: ${(t.videos||[]).join(", ")}`).join("\n\n") + (r.notes?`\n\n메모: ${r.notes}`:"");
+  }catch(e){ AI.claude = sampleErr(e); }
+  AI.busy=false; render();
+}
+async function synthesize(){
+  if (!AI.claude || !AI.gpt.trim()) return toast("Claude 의견과 GPT 답변이 둘 다 있어야 해요");
+  AI.busy=true; AI.ctl=new AbortController(); AI.synth="생각하는 중…"; render();
+  const prompt = `두 AI가 같은 판정 불일치 자료를 보고 '경계 사례 유형'을 제안했습니다. 연구자가 가이드 v2를 정하도록 두 의견을 비교·종합해 주세요.
+
+[의견 1: Claude]
+${AI.claude}
+
+[의견 2: GPT]
+${AI.gpt.slice(0,20000)}
+
+한국어로 다음 순서로 쓰세요:
+1. 두 의견이 같은 유형 (합쳐서 이름 하나로)
+2. 한쪽만 제안한 유형과, 받아들일지에 대한 판단 근거
+3. 서로 충돌하는 규칙과 어느 쪽이 더 판정자가 따라 하기 쉬운지
+4. 최종 추천 유형 목록 (유형 이름 · 규칙 · 해당 영상)
+5. 연구자가 직접 영상을 다시 보고 확인해야 할 것
+근거가 영상 몇 개뿐인 유형은 그렇다고 밝히세요.`;
+  try{ const r = await S.sample(prompt,{signal:AI.ctl.signal,modelTier:"complex",cache:false,onText:({text})=>{AI.synth=text; const o=$("#synthout"); if(o) o.textContent=text; }}); AI.synth=r.text; }
+  catch(e){ AI.synth = e.text ? e.text+"\n\n(중간에 끊겼어요)" : sampleErr(e); }
+  AI.busy=false; render();
+}
+async function draftV2(){
+  const base = AI.synth && !AI.synth.startsWith("생각") ? AI.synth : AI.claude;
+  if (!base) return toast("먼저 유형화 결과가 있어야 해요");
+  AI.busy=true; AI.ctl=new AbortController(); render();
+  const prompt = `아래는 판정 가이드 v1과, 판정이 갈린 사례를 분석한 결과입니다. 판정자에게 그대로 줄 '가이드 v2'를 한국어로 써 주세요.
+- v1의 구조와 말투를 유지하고, 분석에서 나온 경계 사례 규칙을 '이런 경우는 이렇게' 형태로 추가하세요.
+- 규칙마다 짧은 예시 한 줄. 전체는 한 쪽(40줄) 이내.
+- 분석에 근거가 없는 규칙은 넣지 마세요. 가이드 본문만 답하세요.
+
+[가이드 v1]
+${S.config.guides.v1}
+
+[분석 결과]
+${base.slice(0,20000)}`;
+  try{ const r = await S.sample(prompt,{signal:AI.ctl.signal,modelTier:"complex",cache:false}); S.setupDraftV2 = r.text; S.tab="setup"; toast("[설정]의 가이드 v2 칸에 초안을 넣었어요. 고친 뒤 저장하세요"); }
+  catch(e){ toast(sampleErr(e)); }
+  AI.busy=false; render();
+}
+
+/* --- AI 판정자 --- */
+function panelAIRater(){
+  const p = el("div",{class:"panel"},
+    el("h2",{},"2. AI를 5번째 판정자로"),
+    el("p",{class:"muted small"},"판정자와 같은 가이드로 Claude가 영상 장면 사진(영상당 2~4장)을 보고 판정합니다. 영상 링크는 앱 안에서 열 수 없어서, 장면 사진이나 영상 파일을 직접 올려야 해요. 결과는 [분석]에서 사람 다수결과 비교됩니다."),
+    el("div",{class:"row"}, el("label",{class:"field"},"조건", condSelect("aircond",AI.cond,v=>{AI.cond=v; render();}))));
+  const box = el("div",{}, el("p",{class:"muted"},"불러오는 중…")); p.append(box);
+  fillAIRater(box); return p;
+}
+async function fillAIRater(box){
+  const set = CONDS.find(c=>c.id===AI.cond).set;
+  const vids = S.videos.filter(v=>v.set===set).sort((a,b)=>a.vid.localeCompare(b.vid));
+  if (!vids.length){ box.replaceChildren(el("p",{class:"muted"},"영상이 없어요. [설정]에서 먼저 올려 주세요.")); return; }
+  const frames = (await getSecret("frames_"+set))?.map || {};
+  const ai = (await getSecret("ai_"+AI.cond))?.rows || {};
+  const ready = vids.filter(v=>(frames[v.vid]||[]).length && !ai[v.vid]);
+  const status = el("p",{class:"small"}, AI.frameMsg || `장면 사진 있는 영상 ${vids.filter(v=>(frames[v.vid]||[]).length).length}/${vids.length}개 · AI 판정 완료 ${Object.keys(ai).length}개`);
+  const tb = el("table",{}, el("tr",{}, ...["영상","장면 사진","올리기","AI 판정"].map(h=>el("th",{},h))));
+  for (const v of vids.slice(0,240)){
+    const fr = frames[v.vid]||[];
+    const imgIn = el("input",{type:"file",accept:"image/png,image/jpeg,image/webp",multiple:true,id:"img-"+v.vid,style:"max-width:170px",onchange:e=>uploadFrames(set,v.vid,[...e.target.files],box)});
+    const vidIn = el("input",{type:"file",accept:"video/mp4,video/webm",id:"vid-"+v.vid,style:"max-width:170px",onchange:e=>extractFrames(set,v.vid,e.target.files[0],box)});
+    const a = ai[v.vid];
+    tb.append(el("tr",{}, el("td",{class:"num"}, el("a",{href:v.link,target:"_blank",rel:"noopener"},v.vid)),
+      el("td",{}, fr.length? el("div",{class:"frames"}, ...fr.slice(0,4).map(id=>el("img",{src:"/_blob/"+id,alt:v.vid+" 장면"}))) : el("span",{class:"muted small"},"없음")),
+      el("td",{}, el("div",{style:"display:flex;flex-direction:column;gap:4px"}, el("span",{class:"small muted"},"사진"), imgIn, el("span",{class:"small muted"},"또는 영상 파일"), vidIn)),
+      el("td",{class:"small"}, a? el("span",{class: a.presence==="있음"?"chip warn":"chip ok"}, a.presence+(a.severity?"/"+a.severity:"")) : "–")));
+  }
+  box.replaceChildren(status,
+    el("div",{class:"row"}, el("button",{class:"btn primary",disabled:!S.sample||AI.busy||!ready.length,onclick:()=>runAIJudge(set,ready,frames,box)},`다음 묶음 AI 판정 (대기 ${ready.length}개)`), el("button",{class:"btn",disabled:!AI.busy,onclick:()=>AI.ctl?.abort()},"멈추기")),
+    el("div",{class:"tablewrap"},tb));
+}
+async function uploadFrames(set, vid, files, box){
+  if (!S.assets) return toast("이 화면에서는 파일을 올릴 수 없어요 (연구자 권한 필요)");
+  try{
+    const ids=[]; for (const f of files.slice(0,4)){ const r = await S.assets.upload(f); ids.push(r.id); }
+    const cur = (await getSecret("frames_"+set)) || {map:{}}; cur.map[vid] = [...(cur.map[vid]||[]), ...ids].slice(-4);
+    await setSecret("frames_"+set, cur); AI.frameMsg = `${vid}: 사진 ${ids.length}장 올렸어요`; fillAIRater(box);
+  }catch(e){ toast("올리지 못했어요: "+(e.code||"")); }
+}
+async function extractFrames(set, vid, file, box){
+  if (!file) return;
+  AI.frameMsg = `${vid}: 영상에서 장면 4개를 뽑는 중…`; fillAIRater(box);
+  try{
+    const url = URL.createObjectURL(file); const v = document.createElement("video"); v.muted=true; v.src=url; v.preload="auto";
+    await new Promise((res,rej)=>{ v.onloadedmetadata=res; v.onerror=()=>rej(new Error("영상을 열 수 없어요")); setTimeout(()=>rej(new Error("시간 초과")),15000); });
+    const blobs=[]; const c=document.createElement("canvas"); const scale=Math.min(1,960/v.videoWidth); c.width=Math.round(v.videoWidth*scale); c.height=Math.round(v.videoHeight*scale);
+    for (const t of [.15,.4,.65,.9]){
+      await new Promise((res,rej)=>{ v.onseeked=res; v.onerror=rej; v.currentTime=Math.max(0,v.duration*t); setTimeout(res,4000); });
+      c.getContext("2d").drawImage(v,0,0,c.width,c.height);
+      blobs.push(await new Promise(r=>c.toBlob(r,"image/jpeg",.85)));
+    }
+    URL.revokeObjectURL(url);
+    await uploadFrames(set, vid, blobs.filter(Boolean).map((b,i)=>new File([b],`${vid}_${i}.jpg`,{type:"image/jpeg"})), box);
+  }catch(e){ AI.frameMsg = `${vid}: 영상에서 장면을 뽑지 못했어요 (${e.message}). 장면 사진을 직접 올려 주세요.`; fillAIRater(box); }
+}
+async function runAIJudge(set, ready, frames, box){
+  let lim; try{ lim = await S.sample.limits(); }catch{ lim=null; }
+  if (!lim?.images) return toast("이 화면에서는 Claude에게 이미지를 보낼 수 없어요");
+  const per = 4; const batch = []; let count = 0;
+  for (const v of ready){ const n = Math.min(per,(frames[v.vid]||[]).length); if (count+n > lim.images.maxCount || batch.length>=6) break; batch.push(v); count+=n; }
+  if (!batch.length) return;
+  AI.busy=true; AI.ctl=new AbortController(); AI.frameMsg=`AI가 영상 ${batch.length}개를 판정하는 중…`; fillAIRater(box);
+  try{
+    const imgs=[]; const legend=[];
+    for (const v of batch){ const ids=(frames[v.vid]||[]).slice(0,per); legend.push(`${v.vid}: 사진 ${imgs.length+1}~${imgs.length+ids.length}번`); for (const id of ids){ const r=await fetch("/_blob/"+id); imgs.push(await r.blob()); } }
+    const prompt = `당신은 AI 생성 영상의 왜곡을 판정하는 판정자입니다. 사람 판정자와 똑같은 아래 가이드를 따르세요.
+
+[가이드]
+${guideOf(AI.cond)}
+
+첨부 사진은 영상별 장면 캡처입니다(시간 순). 사진 번호 배정:
+${legend.join("\n")}
+장면 사이의 움직임은 직접 볼 수 없으니, 장면들 사이의 변화로만 판단하세요.
+
+JSON 배열만 답하세요. 영상마다 하나씩:
+[{"vid":"A001","presence":"없음|있음|판단 불가","types":["body","motion","object","quality"],"severity":"경미|심각|","reason":"한 문장"}]
+types는 presence가 "있음"일 때만, 해당하는 것만 넣으세요(body=신체 형태, motion=신체 움직임, object=사물·배경, quality=화질).`;
+    const arr = await S.sample.json(prompt,{images:imgs,signal:AI.ctl.signal,modelTier:"default"});
+    const cur = (await getSecret("ai_"+AI.cond)) || {rows:{}};
+    let n=0; for (const r of (Array.isArray(arr)?arr:[])){ if (!batch.find(b=>b.vid===r.vid)) continue; cur.rows[r.vid] = {presence:r.presence, types:(r.types||[]).filter(t=>TYPES.some(x=>x.k===t)), severity:r.presence==="있음"?(r.severity||""):"", memo:r.reason||"", at:new Date().toISOString()}; n++; }
+    await setSecret("ai_"+AI.cond, cur); AI.frameMsg = `AI 판정 ${n}개를 저장했어요.`;
+  }catch(e){ AI.frameMsg = sampleErr(e); }
+  AI.busy=false; fillAIRater(box);
+}
+
+/* ===================== 연구자: 설계 검토 ===================== */
+const REVIEW = {out:""};
+function reviewPrompt(){
+  return `다음 연구 설계를 학술대회 심사위원의 눈으로 검토해 주세요. 한국어로, 약점을 우선순위대로 지적하고 각각 고칠 방법을 제안하세요.
+
+[연구 제목(가제)] 판정 가이드의 경계 사례 보완이 생성 영상 왜곡 라벨의 판정자 간 일치도에 미치는 영향
+[연구 질문]
+RQ1. 간단한 가이드(v1)로 판정하면 판정자 간 일치도는 어느 정도이고 어디서 갈리는가?
+RQ2. 갈린 사례를 유형화해 보완한 가이드(v2)는 일치도를 높이는가?
+RQ3(보조). 사람의 왜곡 판정은 데이터셋의 기존 화질 점수와 얼마나 관련 있는가?
+[데이터] VideoFeedback(Apache-2.0) 중 프롬프트에 사람이 등장하는 영상 240개. 화질 점수 1~4점 층마다 60개, 층별로 반씩 세트 A·B(각 120개).
+[절차] 판정자 4명(성인, 비전문가 포함 가능). 1주 준비 → 2주 파일럿 10개 → 3주 세트 A를 v1로 판정 → 4주 갈린 사례를 유형화해 v2 작성(AI 두 개의 의견을 참고하되 연구자가 결정) → 5~6주 세트 B를 v2로 판정, 2주 뒤 세트 A를 v2로 재판정 → 7~8주 분석.
+[판정 항목] 왜곡 유무(없음/있음/판단 불가), 유형 다중선택(신체 형태/신체 움직임/사물·배경/화질), 심각도(경미/심각), 재생 횟수, 메모.
+[분석] 항목별 Fleiss 카파, 영상 단위 부트스트랩 2,000회 95% 구간. 주 비교: 세트 A(v1) 대 세트 B(v2), 보강 비교: 세트 A의 v1 대 v2(같은 영상). RQ3은 스피어만 상관. 보조로 AI(Claude)를 장면 캡처로 5번째 판정자로 넣어 사람 다수결과의 일치도를 보고.
+[연구자] 생성 영상 판정 QC 실무 9개월 경력의 독립 연구자.
+
+특히 다음을 봐 주세요: 학습 효과·순서 효과, 세트 간 난이도 차이, 판정자 수와 표본 크기의 충분성, v2를 만든 사람이 연구자라는 점의 편향, AI 판정자 비교의 타당성, 윤리(동의·사례비).`;
+}
+function viewReview(){
+  const out = el("div",{class:"out"}, REVIEW.out || "아직 없음");
+  return el("div",{class:"panel"},
+    el("h2",{},"설계 검토 — GPT와 Claude에게 같은 질문"),
+    el("p",{class:"muted small"},"같은 질문을 두 AI에 던져 약점을 찾습니다. GPT 답은 위 [AI 보조]처럼 직접 붙여 넣어 비교하세요."),
+    el("div",{class:"guide"},reviewPrompt()),
+    el("div",{class:"row"},
+      el("button",{class:"btn",onclick:async()=>{ try{ await navigator.clipboard.writeText(reviewPrompt()); toast("복사했어요. ChatGPT에 붙여 넣으세요"); }catch{ toast("복사가 막혔어요. 위 글을 직접 선택해 복사하세요"); } }},"GPT용 질문 복사"),
+      el("a",{href:"https://chatgpt.com/",target:"_blank",rel:"noopener",class:"small"},"ChatGPT 열기 ↗"),
+      el("button",{class:"btn primary",disabled:!S.sample,onclick:async e=>{ e.target.disabled=true; REVIEW.out="생각하는 중…"; out.textContent=REVIEW.out;
+        try{ const r=await S.sample(reviewPrompt(),{modelTier:"complex",onText:({text})=>{REVIEW.out=text; out.textContent=text;}}); REVIEW.out=r.text; }catch(x){ REVIEW.out = x.text || sampleErr(x); }
+        out.textContent=REVIEW.out; e.target.disabled=false; }},"Claude에게 검토 받기")),
+    out);
+}
+
+/* ===================== 연구자: 설정 ===================== */
+function viewSetup(){
+  const p1 = el("div",{class:"panel"},
+    el("h2",{},"지금 판정할 조건"),
+    el("p",{class:"muted small"},"판정자 화면에는 여기서 고른 조건만 보입니다. 1차가 끝나면 v2를 저장한 뒤 바꾸세요."),
+    el("div",{class:"seg"}, ...CONDS.map(c=>el("button",{"aria-pressed":String(S.config.active===c.id),onclick:async()=>{ await saveConfig({active:c.id}); toast(c.label+"로 바꿨어요"); }},c.label))));
+  const v1 = el("textarea",{id:"g1",rows:"12"}, S.config.guides.v1);
+  const v2 = el("textarea",{id:"g2",rows:"12",placeholder:"[AI 보조]에서 초안을 만들거나 직접 쓰세요"}, S.setupDraftV2 || S.config.guides.v2);
+  const p2 = el("div",{class:"panel"}, el("h2",{},"판정 가이드"),
+    el("div",{class:"grid2"}, el("label",{class:"field"},"가이드 v1",v1), el("label",{class:"field"},"가이드 v2"+(S.setupDraftV2?" (AI 초안 — 고친 뒤 저장하세요)":""),v2)),
+    el("div",{class:"row"}, el("button",{class:"btn primary",onclick:async()=>{ await saveConfig({guides:{v1:v1.value, v2:v2.value}}); S.setupDraftV2=null; toast("가이드를 저장했어요"); }},"가이드 저장")));
+  const vmsg = el("p",{class:"small muted"});
+  const p3 = el("div",{class:"panel"}, el("h2",{},"영상 목록 올리기"),
+    el("p",{class:"muted small"},"01_sample_videos.py가 만든 videos_A.csv, videos_B.csv를 올리세요. 화질 점수는 판정자가 볼 수 없는 곳에 따로 저장됩니다."),
+    el("input",{type:"file",id:"vcsv",accept:".csv,text/csv",multiple:true,onchange:e=>importVideos([...e.target.files],vmsg)}), vmsg);
+  const imsg = el("p",{class:"small muted"});
+  const p4 = el("div",{class:"panel"}, el("h2",{},"엑셀 판정 결과 가져오기"),
+    el("p",{class:"muted small"},"판정자가 Claude 계정 없이 엑셀(02_make_sheets.py가 만든 sheet_A_v1_R1.xlsx 등)로 판정했다면 여기서 합칩니다. 파일 이름에서 조건과 판정자 번호를 읽습니다."),
+    el("input",{type:"file",id:"xlsx",accept:".xlsx",multiple:true,onchange:e=>importSheets([...e.target.files],imsg)}), imsg);
+  const p5 = el("div",{class:"panel"}, el("h2",{},"전체 결과 내보내기"),
+    el("p",{class:"muted small"},"모든 판정을 한 줄씩 CSV로 저장합니다. 파이썬 스크립트와 같은 형식으로 다시 계산하거나 논문 부록에 씁니다."),
+    el("div",{class:"row"}, el("button",{class:"btn",disabled:!S.downloads,onclick:exportAll},"CSV로 저장")));
+  return el("div",{style:"display:flex;flex-direction:column;gap:16px"}, p1, p2, p3, p4, p5);
+}
+async function saveConfig(patch){
+  const next = {active:S.config.active, guides:{...S.config.guides}, ...patch};
+  if (patch.guides) next.guides = {...S.config.guides, ...patch.guides};
+  try{ await S.db.doc("study/config").set(next); }catch{ toast("저장하지 못했어요"); }
+}
+function parseCSV(text){
+  const rows=[]; let row=[], cur="", q=false;
+  text = text.replace(/^﻿/,"");
+  for (let i=0;i<text.length;i++){ const ch=text[i];
+    if (q){ if (ch==='"'){ if (text[i+1]==='"'){ cur+='"'; i++; } else q=false; } else cur+=ch; }
+    else if (ch==='"') q=true; else if (ch===','){ row.push(cur); cur=""; } else if (ch==='\n'){ row.push(cur); rows.push(row); row=[]; cur=""; } else if (ch!=='\r') cur+=ch; }
+  if (cur||row.length){ row.push(cur); rows.push(row); }
+  const head = rows.shift()||[]; return rows.filter(r=>r.length>1).map(r=>Object.fromEntries(head.map((h,i)=>[h.trim(),r[i]])));
+}
+async function importVideos(files, msg){
+  try{
+    let n=0; const vq={...((await getSecret("vq"))?.map||{})};
+    for (const f of files){
+      const rows = parseCSV(await f.text());
+      for (const r of rows){
+        const vid=(r.video_id||"").trim(); if (!/^[AB]\d{3}$/.test(vid)) continue;
+        await S.db.doc("videos/"+vid).set({vid, set:vid[0], link:(r.video_link||"").trim()});
+        if (r.visual_quality) vq[vid]=Number(r.visual_quality); n++;
+        if (n%20===0) msg.textContent=`${n}개 올리는 중…`;
+      }
+    }
+    await setSecret("vq",{map:vq}); msg.textContent=`영상 ${n}개를 올렸어요.`;
+  }catch(e){ msg.textContent="올리지 못했어요: "+(e.message||e.code||""); }
+}
+async function importSheets(files, msg){
+  if (typeof XLSX==="undefined"){ msg.textContent="엑셀 읽기 도구를 불러오지 못했어요."; return; }
+  const typeKey = {"신체 형태":"body","신체 움직임":"motion","사물·배경":"object","화질":"quality"};
+  const done=[];
+  for (const f of files){
+    const m = f.name.match(/sheet_([AB])_(v[12])_(R\d+)/i);
+    if (!m){ done.push(`${f.name}: 이름에서 조건을 못 읽음`); continue; }
+    const cond = `${m[1].toUpperCase()}-${m[2].toLowerCase()}`, lab=m[3].toUpperCase();
+    if (!CONDS.some(c=>c.id===cond)){ done.push(`${f.name}: 알 수 없는 조건`); continue; }
+    const wb = XLSX.read(await f.arrayBuffer(),{type:"array"}); const ws = wb.Sheets["판정"] || wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws,{defval:""}); const out={};
+    for (const r of rows){
+      const vid=String(r["video_id"]||"").trim(); const pres=String(r["왜곡 유무"]||"").trim(); if (!vid||!pres) continue;
+      const types = Object.entries(typeKey).filter(([k])=>String(r[k]).trim().toUpperCase()==="O").map(([,v])=>v);
+      out[vid] = {cond, vid, presence:pres, types: pres==="있음"?types:[], severity: pres==="있음"?String(r["심각도"]||"").trim():"", plays:Number(r["재생 횟수"])||null, memo:String(r["메모"]||"").trim()};
+    }
+    try{ await setSecret(`imported_${cond}_${lab}`, {rows:out, file:f.name, at:new Date().toISOString()}); done.push(`${f.name}: ${Object.keys(out).length}개`); }
+    catch{ done.push(`${f.name}: 저장 실패`); }
+  }
+  msg.textContent = done.join(" · ");
+}
+async function exportAll(){
+  try{
+    const lines=[["cond","rater","video_id","presence","types","severity","plays","memo"].join(",")];
+    const esc = s => `"${String(s??"").replace(/"/g,'""')}"`;
+    for (const c of CONDS){ const H = await loadAllHuman(c.id); for (const [lab,m] of Object.entries(H)) for (const j of Object.values(m)) lines.push([c.id,lab,j.vid,j.presence,(j.types||[]).join("+"),j.severity,j.plays??"",j.memo].map(esc).join(","));
+      const ai=(await getSecret("ai_"+c.id))?.rows||{}; for (const [vid,j] of Object.entries(ai)) lines.push([c.id,"AI",vid,j.presence,(j.types||[]).join("+"),j.severity,"",j.memo].map(esc).join(",")); }
+    await S.downloads.save({filename:"판정결과_전체.csv", data:new Blob(["﻿"+lines.join("\n")],{type:"text/csv"})});
+  }catch(e){ if (e&&e.code!=="cancelled") toast("저장하지 못했어요"); }
+}
+</script>

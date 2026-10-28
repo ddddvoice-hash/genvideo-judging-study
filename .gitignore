@@ -1,0 +1,5 @@
+__pycache__/
+*.xlsx
+videos_*.csv
+report_*.md
+disagreements_*.csv
